@@ -7,6 +7,7 @@ Fill in YOUR_SYSTEM_PROMPT and YOUR_RETRIEVER.
 Run:  python rag.py
 """
 import os
+import re
 
 from ollama import chat
 
@@ -21,12 +22,41 @@ def load_chunks() -> list[str]:
 
 
 # TODO: return the subset of chunks relevant to `question` (simple keyword overlap is fine).
+STOPWORDS = {
+    "the", "a", "an", "do", "does", "you", "your", "i", "to", "is", "what", "whats",
+    "how", "have", "my", "me", "for", "of", "in", "on", "can", "it", "and", "or",
+    "are", "with", "at", "by", "be",
+}
+
+
+def _keys(text: str) -> set[str]:
+    """Lowercase words minus stopwords, cut to their first 4 letters.
+
+    The 4-letter cut is a cheap stemmer: "return"/"returns", "ship"/"shipping",
+    "internationally"/"international" all map to the same key.
+    """
+    words = re.findall(r"[a-z0-9]+", text.lower())
+    return {w[:4] for w in words if w not in STOPWORDS and len(w) > 2}
+
+
 def YOUR_RETRIEVER(question: str, chunks: list[str]) -> list[str]:
-    return []
+    """Return the chunks that share at least one keyword with the question.
+
+    If nothing overlaps, return [] so the model gets no context and must say it
+    doesn't know.
+    """
+    q = _keys(question)
+    return [c for c in chunks if q & _keys(c)]
 
 
 # TODO: Fill this in! Force the model to answer only from the provided context.
-YOUR_SYSTEM_PROMPT = ""
+YOUR_SYSTEM_PROMPT = """You are a customer-support assistant for an online store.
+Answer the question using ONLY the information in the Context.
+Do not use any outside knowledge and do not guess.
+If the Context is empty or does not contain the answer, reply exactly:
+I don't know based on our help center.
+Keep answers to one or two sentences and reuse the wording from the Context
+(for example, keep numbers like "30 days" and words like "international")."""
 
 CASES = [
     ("How long do I have to return an item?", ["30 days"]),
